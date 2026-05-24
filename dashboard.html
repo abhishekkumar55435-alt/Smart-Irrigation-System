@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Smart Farm Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; background-color: #f4f7f6; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h1 { color: #2c7a7b; }
+        .slider-group { margin: 20px 0; text-align: left; }
+        input[type="range"] { width: 100%; }
+        button { background-color: #38a169; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; }
+        button:hover { background-color: #2f855a; }
+        #result { margin-top: 20px; font-weight: bold; font-size: 18px; padding: 10px; border-radius: 5px; }
+        /* NEW: Styles for the Database Table */
+        table { width: 100%; border-collapse: collapse; margin-top: 30px; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background-color: #2c7a7b; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌱 Smart Farm Dashboard</h1>
+        
+        <div class="slider-group">
+            <label>Temperature: <span id="tempVal">30</span> °C</label>
+            <input type="range" id="temp" min="0" max="50" value="30" oninput="document.getElementById('tempVal').innerText = this.value">
+        </div>
+        
+        <div class="slider-group">
+            <label>Humidity: <span id="humVal">50</span> %</label>
+            <input type="range" id="hum" min="0" max="100" value="50" oninput="document.getElementById('humVal').innerText = this.value">
+        </div>
+        
+        <div class="slider-group">
+            <label>Soil Moisture: <span id="moistVal">40</span> %</label>
+            <input type="range" id="moist" min="0" max="100" value="40" oninput="document.getElementById('moistVal').innerText = this.value">
+        </div>
+
+        <button onclick="askAI()">Ask AI for Prediction</button>
+        <div id="result">Waiting for prediction...</div>
+
+        <h3>📋 Recent Watering History</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Temp (°C)</th>
+                    <th>Moisture (%)</th>
+                    <th>AI Decision</th>
+                </tr>
+            </thead>
+            <tbody id="historyTable">
+                </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function askAI() {
+            let t = document.getElementById('temp').value;
+            let h = document.getElementById('hum').value;
+            let m = document.getElementById('moist').value;
+            
+            try {
+                let response = await fetch(`http://127.0.0.1:5000/predict?temp=${t}&hum=${h}&moist=${m}`);
+                let data = await response.json();
+                
+                let resDiv = document.getElementById('result');
+                resDiv.innerText = data.message;
+                
+                if(data.pump_action === 1) {
+                    resDiv.style.backgroundColor = "#c6f6d5";
+                    resDiv.style.color = "#22543d";
+                } else if(data.pump_action === 2) {
+                    resDiv.style.backgroundColor = "#fed7d7";
+                    resDiv.style.color = "#742a2a";
+                } else {
+                    resDiv.style.backgroundColor = "#e2e8f0";
+                    resDiv.style.color = "#1a202c";
+                }
+
+                // NEW: Update the table right after making a new prediction
+                fetchHistory();
+
+            } catch (error) {
+                document.getElementById('result').innerText = "❌ Error connecting to server!";
+            }
+        }
+
+        // NEW: Function to ask the server for the Firebase data
+        async function fetchHistory() {
+            try {
+                let response = await fetch('http://127.0.0.1:5000/history');
+                let result = await response.json();
+                
+                let tableBody = document.getElementById('historyTable');
+                tableBody.innerHTML = ""; // Clear out the old rows
+                
+                // Loop through the data and build a table row for each one
+                result.data.forEach(log => {
+                    let actionText = log.pump_action === 1 ? "💧 Pump ON" : (log.pump_action === 2 ? "🚨 CRITICAL" : "✅ Normal");
+                    
+                    let row = `<tr>
+                        <td>${log.timestamp}</td>
+                        <td>${log.temperature}</td>
+                        <td>${log.moisture}</td>
+                        <td>${actionText}</td>
+                    </tr>`;
+                    tableBody.innerHTML += row;
+                });
+            } catch (error) {
+                console.log("Error fetching history");
+            }
+        }
+
+        // NEW: Automatically load the table as soon as the page opens
+        window.onload = fetchHistory;
+    </script>
+</body>
+</html>
